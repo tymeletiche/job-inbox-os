@@ -9,7 +9,18 @@
       "Bash(SKIP_PREFLIGHT_CHECK=true npx:*)",
       "Bash(npm install:*)",
       "Bash(npx prisma init:*)",
-      "Bash(docker compose:*)"
+      "Bash(docker compose:*)",
+      "Bash(brew install:*)",
+      "Bash(docker --version:*)",
+      "Bash(lsof:*)",
+      "Bash(sudo lsof:*)",
+      "Bash(npx prisma migrate dev:*)",
+      "Bash(npx prisma db seed:*)",
+      "Bash(npx prisma generate:*)",
+      "Bash(npm run prisma:*)",
+      "Bash(npm run dev:*)",
+      "Bash(curl:*)",
+      "Bash(python3:*)"
     ]
   }
 }
