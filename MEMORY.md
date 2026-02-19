@@ -1,9 +1,9 @@
 # Job Inbox OS - Project Memory
 
 ## Project Overview
-MVP monorepo for converting job-related emails into structured, actionable events with a review queue UI.
+MVP monorepo for converting job-related emails into structured, actionable events with a review queue UI. Now supports real Gmail integration with an email objectification framework.
 
-## Current State (✅ COMPLETE + Classifier V2)
+## Current State (✅ MVP + Gmail Integration + Email Groups)
 
 ### Working Features
 - ✅ Mock email ingestion via POST /api/mock-ingest
@@ -11,14 +11,21 @@ MVP monorepo for converting job-related emails into structured, actionable event
 - ✅ PostgreSQL database with Prisma ORM
 - ✅ Review Queue UI at /review
 - ✅ Confirm/Reject event actions
-- ✅ Complete API endpoints
-- ✅ Vitest test suite (61 tests, all passing)
+- ✅ Gmail OAuth integration (connect, sync, status)
+- ✅ Real Gmail email sync (50 emails, zero errors on first test)
+- ✅ Email objectification framework (EmailGroup model)
+- ✅ Transaction-safe shared ingest pipeline
+- ✅ Gmail message dedup via gmailMessageId
+- ✅ HTML-to-text conversion for Gmail emails
+- ✅ Vitest test suite (201 tests, all passing)
 
 ### Tech Stack
 - **Frontend**: Next.js 16.1.6 (App Router, TypeScript, React 19)
 - **Styling**: Tailwind CSS 4.1.18 with @tailwindcss/postcss
 - **Database**: PostgreSQL 16 (Docker)
 - **ORM**: Prisma 5.22.0
+- **Gmail**: googleapis (OAuth2 + Gmail API)
+- **HTML Parsing**: html-to-text
 - **Testing**: Vitest 4.0.18
 - **Runtime**: Node.js 18+
 
@@ -29,14 +36,19 @@ Root/
   web/                       # Next.js app
     vitest.config.ts         # Test runner config
     app/
-      page.tsx              # Landing page
+      page.tsx              # Landing page + Gmail connect/sync UI
       review/page.tsx       # Review Queue UI
       api/
-        mock-ingest/route.ts  # Email ingestion
-        review/route.ts       # Fetch events
-        review/confirm/route.ts  # Confirm/reject
+        mock-ingest/route.ts       # Mock email ingestion (uses shared ingest)
+        review/route.ts            # Fetch events
+        review/confirm/route.ts    # Confirm/reject
+        auth/gmail/route.ts        # OAuth start → redirect to Google
+        auth/gmail/callback/route.ts  # OAuth callback → store tokens
+        gmail/sync/route.ts        # POST: trigger manual sync
+        gmail/status/route.ts      # GET: connection status
     lib/
       prisma.ts             # DB client singleton
+      ingest.ts             # Shared ingest pipeline (classify → group → store)
       classifier.ts         # Orchestrator (thin wrapper)
       classifier/
         types.ts            # Shared interfaces
@@ -44,11 +56,16 @@ Root/
         domains.ts          # ATS/recruiter domain lists + helpers
         extraction.ts       # Multi-strategy regex extraction
         scoring.ts          # Weighted scoring engine
+      gmail/
+        client.ts           # OAuth2 client factory + token refresh
+        parse.ts            # MIME parser, From header parsing, base64url decode
+        html-to-text.ts     # HTML→text for classifier
+        sync.ts             # Fetch messages, dedup, classify, ingest
     prisma/
       schema.prisma         # DB models + enums
       seed.ts              # Dev user seeding
     __tests__/
-      classifier.test.ts   # 61 integration tests
+      classifier.test.ts   # 201 integration tests
       fixtures/
         emails.ts          # Test email fixtures
 ```
@@ -56,10 +73,12 @@ Root/
 ## Database Schema
 
 ### Models
-1. **User** - id, email, name
-2. **Job** - company, position, userId (unique constraint)
-3. **JobEvent** - type, status, jobId, emailMessageId, extractedData, rawData
-4. **EmailMessage** - subject, body, sender
+1. **User** - id, email, name + relations to jobs, events, gmailAccount, emailGroups
+2. **GmailAccount** - userId (unique), gmailEmail, accessToken, refreshToken, tokenExpiry, lastSyncAt, lastHistoryId
+3. **EmailGroup** - userId, jobId?, gmailThreadId?, companyKey?, emailCount, latestEventType, firstEmailAt, lastEmailAt
+4. **Job** - company, position, userId (unique constraint) + emailGroups relation
+5. **JobEvent** - type, status, jobId, emailMessageId, extractedData, rawData
+6. **EmailMessage** - subject, body, sender, gmailMessageId? (unique), gmailThreadId?, groupId?
 
 ### Enums
 - **EventType**: APPLICATION_RECEIVED, INTERVIEW_REQUEST, INTERVIEW_SCHEDULED, ASSESSMENT, OFFER, REJECTION, RECRUITER_OUTREACH, OTHER
@@ -69,85 +88,76 @@ Root/
 - Job ← User (many-to-one)
 - JobEvent ← Job (many-to-one)
 - JobEvent ← EmailMessage (one-to-one)
-- Unique constraint: Job(userId, company, position)
+- EmailMessage ← EmailGroup (many-to-one)
+- EmailGroup ← Job (many-to-one, optional)
+- GmailAccount ← User (one-to-one)
+- Unique constraints: Job(userId, company, position), EmailGroup(userId, gmailThreadId), EmailMessage(gmailMessageId)
+
+## Email Objectification Framework
+
+### How It Works
+Every email is assigned to an EmailGroup on ingest:
+- **Gmail emails**: grouped by gmailThreadId (all emails in a conversation share one group)
+- **Mock emails**: grouped by normalized company name (companyKey)
+- **Unknown company**: standalone group (no piling into a single "Unknown" bucket)
+
+### Shared Ingest Pipeline (`lib/ingest.ts`)
+Both mock-ingest and Gmail sync call `ingestEmail()`:
+1. Classify email (existing classifier, zero changes)
+2. Find or create EmailGroup (by threadId or companyKey)
+3. Create EmailMessage (body truncated to 5000 chars, full in rawHeaders)
+4. Find or create Job (reuses group's existing Job if linked)
+5. Create JobEvent
+6. Update group metadata (emailCount, latestEventType, lastEmailAt)
+All wrapped in `prisma.$transaction()`.
+
+### Future Capabilities (no schema changes needed)
+- "My Applications" view: list EmailGroups as application objects
+- Timeline view: ordered emails per group
+- Merge/split groups: update groupId FK
+- Status progression: group's latestEventType shows current stage
+- Re-classification at group level
+
+## Gmail Integration
+
+### OAuth Flow
+1. GET /api/auth/gmail → redirect to Google consent screen
+2. Google callback → GET /api/auth/gmail/callback → exchange code for tokens → store GmailAccount
+3. `access_type: 'offline'` + `prompt: 'consent'` ensures refresh token
+4. Automatic token refresh when expired (5-minute buffer)
+
+### Sync Flow
+1. POST /api/gmail/sync → fetch messages from last 7 days (max 50)
+2. Dedup by gmailMessageId (skip if already in DB)
+3. Parse MIME: recursive part walker, prefer text/plain, fall back to HTML→text
+4. Parse From header: `"Name <email>"` → bare email
+5. Call shared ingestEmail() with gmailMessageId + gmailThreadId
+6. Update lastSyncAt
+
+### Body Storage
+- `EmailMessage.body`: first 5000 chars
+- `EmailMessage.rawHeaders`: JSON with fullBody, gmailMessageId, gmailThreadId
 
 ## Classifier V2 Design
-
-### Architecture
-Modular design split into 5 files under `web/lib/classifier/`:
-- **types.ts** — ClassifierInput, ClassifierOutput, EventPattern, ScoringResult
-- **keywords.ts** — EVENT_PATTERNS record with subjectKeywords, keywords, negativeKeywords per type
-- **domains.ts** — ATS domains (Greenhouse, Lever, Workday, etc.), recruiter domains, noreply detection
-- **extraction.ts** — Multi-strategy regex for company, position, date, salary, assessment links, deadlines
-- **scoring.ts** — Weighted scoring engine with subject weighting, domain bonuses, ambiguity resolution
 
 ### Public API (unchanged)
 ```typescript
 classifyEmail(input: { subject: string; body: string; sender: string }): ClassifierOutput
 ```
-The sole consumer `web/app/api/mock-ingest/route.ts` requires ZERO changes.
 
 ### Scoring Algorithm
-- **Subject-specific keywords**: weight 2.0 per match
-- **General keywords in subject**: weight 1.5 per match
-- **Body keywords**: weight 1.0 per match
-- **Negative keywords**: -1.5 penalty (e.g., "unfortunately" penalizes INTERVIEW_REQUEST)
-- **ATS domain bonus**: +1.0 for non-recruiter types
-- **Recruiter domain bonus**: +2.0 for RECRUITER_OUTREACH
-- **Noreply bonus**: +0.5 for APPLICATION_RECEIVED
-- **Confidence**: Smooth exponential curve `1 - e^(-0.25 * rawScore)`, capped at 0.95
-- **Threshold**: < 0.25 confidence → OTHER
+- Subject-specific keywords: weight 2.0
+- General keywords in subject: weight 1.5
+- Body keywords: weight 1.0
+- Negative keywords: -1.5 penalty
+- ATS domain bonus: +1.0
+- Recruiter domain bonus: +2.0
+- Noreply bonus: +0.5
+- Confidence: `1 - e^(-0.25 * rawScore)`, capped at 0.95
+- Threshold: < 0.25 → OTHER
 
-### Ambiguity Resolution (tie-breaking)
-When top 2 scores are within 20%, priority hierarchy applies:
-REJECTION > OFFER > INTERVIEW_SCHEDULED > INTERVIEW_REQUEST > ASSESSMENT > APPLICATION_RECEIVED > RECRUITER_OUTREACH
-
-### Pre-filters
-- **Newsletter detection**: 2+ signals (unsubscribe, job alert, manage notifications) → OTHER
-- **Forwarded email stripping**: Removes "Fwd:", forwarded message headers
-
-### Extraction Patterns
-- **Company**: 7 regex patterns + sender-domain fallback + post-processing cleanup
-- **Position**: 9 regex patterns (for the X role, position of X, as a X, etc.)
-- **Date**: 8 patterns (scheduled for, on Monday, ISO dates, relative dates)
-- **Assessment links**: 12+ platforms (HackerRank, Codility, CoderPad, Karat, etc.)
-- **Salary**: Range ($X-$Y), base salary, $XK format
-- **Deadline**: complete by, deadline:, you have X hours/days
-
-### False Positive Protections
-- Removed overly generic OFFER keywords: "congratulations", "stock options", "benefits package", "start date"
-- Newsletter pre-filter catches job alert digests
-- Negative keywords prevent misclassification (e.g., rejection emails mentioning interviews)
-
-## Test Suite (61 tests)
-
-### Structure
-```
-web/__tests__/
-  classifier.test.ts        # Integration tests
-  fixtures/emails.ts         # All test fixtures
-```
-
-### Coverage
-| Category | Tests |
-|---|---|
-| APPLICATION_RECEIVED | 6 |
-| INTERVIEW_REQUEST | 5 |
-| INTERVIEW_SCHEDULED | 4 |
-| ASSESSMENT | 5 |
-| OFFER | 4 |
-| REJECTION | 6 |
-| RECRUITER_OUTREACH | 4 |
-| Edge cases | 10 |
-| False positive guards | 5 |
-| Scoring behavior | 5 |
-| Extraction | 7 |
-
-### Run Tests
-```bash
-cd web && npm test        # Single run
-cd web && npm run test:watch  # Watch mode
-```
+### Ambiguity Resolution
+When top 2 scores within 20%, priority: REJECTION > OFFER > INTERVIEW_SCHEDULED > INTERVIEW_REQUEST > ASSESSMENT > APPLICATION_RECEIVED > RECRUITER_OUTREACH
 
 ## Environment Variables
 
@@ -156,6 +166,15 @@ cd web && npm run test:watch  # Watch mode
 DATABASE_URL="postgresql://jobinbox:devpassword@localhost:5434/jobinbox_dev"
 DEV_USER_ID="dev-user-1"
 NODE_ENV="development"
+
+# Gmail OAuth
+GOOGLE_CLIENT_ID="..."
+GOOGLE_CLIENT_SECRET="..."
+GOOGLE_REDIRECT_URI="http://localhost:3000/api/auth/gmail/callback"
+
+# Gmail Sync
+GMAIL_SYNC_MAX_RESULTS="50"
+GMAIL_SYNC_QUERY="newer_than:7d"
 ```
 
 ## Git History
@@ -169,34 +188,8 @@ NODE_ENV="development"
 7. `0821dec` - Add .env.example
 8. `d3c63ef` - Improve email classifier with expanded keywords, weighted scoring, and test suite
 9. `bc126e8` - Fix false positives: remove generic OFFER keywords and add false-positive test guards
-
-## Important Files
-
-### Classifier (core logic)
-- `web/lib/classifier.ts` — Orchestrator (public API)
-- `web/lib/classifier/types.ts` — Interfaces
-- `web/lib/classifier/keywords.ts` — All keyword lists
-- `web/lib/classifier/domains.ts` — ATS/recruiter domain helpers
-- `web/lib/classifier/extraction.ts` — Regex extraction
-- `web/lib/classifier/scoring.ts` — Scoring engine
-
-### Tests
-- `web/__tests__/classifier.test.ts` — Test runner
-- `web/__tests__/fixtures/emails.ts` — Test fixtures + factory
-
-### API Routes
-- `web/app/api/mock-ingest/route.ts` — Email ingestion
-- `web/app/api/review/route.ts` — Fetch events
-- `web/app/api/review/confirm/route.ts` — Confirm/reject
-
-### UI
-- `web/app/review/page.tsx` — Review Queue
-
-### Configuration
-- `docker-compose.yml` — Database (port 5434)
-- `web/.env` — Environment variables
-- `web/vitest.config.ts` — Test config
-- `web/prisma/schema.prisma` — DB schema
+10. `acf470a` - Expand classifier test suite from 61 to 201 tests
+11. `[next]` - Add Gmail integration with email objectification framework
 
 ## Development Commands
 
@@ -207,7 +200,7 @@ cd web && npm run dev
 
 # Database
 npx prisma studio
-npx prisma migrate dev
+npx prisma db push
 npx prisma db seed
 npx prisma generate
 
@@ -215,16 +208,17 @@ npx prisma generate
 cd web && npm test
 cd web && npm run test:watch
 
+# Gmail testing
+curl -s http://localhost:3000/api/gmail/status | python3 -m json.tool
+curl -s -X POST http://localhost:3000/api/gmail/sync | python3 -m json.tool
+
 # Send test email
-node -e '
-const http = require("http");
-const data = JSON.stringify({ subject: "...", body: "...", sender: "..." });
-const req = http.request({ hostname: "localhost", port: 3000, path: "/api/mock-ingest", method: "POST", headers: { "Content-Type": "application/json" } }, (res) => { let b=""; res.on("data",(c)=>b+=c); res.on("end",()=>console.log(JSON.parse(b))); });
-req.write(data); req.end();
-'
+curl -X POST http://localhost:3000/api/mock-ingest \
+  -H "Content-Type: application/json" \
+  -d '{"subject":"...","body":"...","sender":"..."}'
 ```
 
 ---
 
 Last Updated: 2026-02-19
-Status: ✅ MVP Complete, Classifier V2 with 61 tests passing
+Status: ✅ MVP + Gmail Integration + Email Objectification Framework (201 tests passing)

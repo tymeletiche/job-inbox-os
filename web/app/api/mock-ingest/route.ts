@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
-import { classifyEmail } from '@/lib/classifier';
+import { ingestEmail } from '@/lib/ingest';
 
 export async function POST(request: NextRequest) {
   try {
@@ -13,58 +12,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Classify email
-    const classification = classifyEmail({ subject, body, sender });
-
-    // Create email message
-    const emailMessage = await prisma.emailMessage.create({
-      data: { subject, body, sender },
-    });
-
-    // Extract or default company/position
-    const company = classification.extractedData.company || 'Unknown Company';
-    const position = classification.extractedData.position || 'Unknown Position';
-
-    // Get dev user ID from env
     const userId = process.env.DEV_USER_ID;
     if (!userId) {
       throw new Error('DEV_USER_ID environment variable not set');
     }
 
-    // Find or create job
-    const job = await prisma.job.upsert({
-      where: {
-        userId_company_position: {
-          userId,
-          company,
-          position,
-        },
-      },
-      update: {},
-      create: {
-        userId,
-        company,
-        position,
-      },
-    });
+    const result = await ingestEmail({ subject, body, sender, userId });
 
-    // Create job event
-    const jobEvent = await prisma.jobEvent.create({
-      data: {
-        jobId: job.id,
-        userId,
-        emailMessageId: emailMessage.id,
-        type: classification.eventType,
-        extractedData: classification.extractedData,
-        rawData: {
-          matches: classification.rawMatches,
-          confidence: classification.confidence,
-        },
-      },
-      include: { job: true },
-    });
-
-    return NextResponse.json({ success: true, jobEvent });
+    return NextResponse.json({ success: true, jobEvent: result.jobEvent });
   } catch (error) {
     console.error('Mock ingest error:', error);
     return NextResponse.json(

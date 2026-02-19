@@ -16,8 +16,47 @@ model User {
   name      String
   createdAt DateTime    @default(now())
 
-  jobs      Job[]
-  jobEvents JobEvent[]
+  jobs         Job[]
+  jobEvents    JobEvent[]
+  gmailAccount GmailAccount?
+  emailGroups  EmailGroup[]
+}
+
+model GmailAccount {
+  id            String    @id @default(cuid())
+  userId        String    @unique
+  gmailEmail    String
+  accessToken   String    @db.Text
+  refreshToken  String    @db.Text
+  tokenExpiry   DateTime
+  lastSyncAt    DateTime?
+  lastHistoryId String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model EmailGroup {
+  id              String     @id @default(cuid())
+  userId          String
+  jobId           String?
+  gmailThreadId   String?
+  companyKey      String?
+  emailCount      Int        @default(1)
+  latestEventType EventType?
+  firstEmailAt    DateTime   @default(now())
+  lastEmailAt     DateTime   @default(now())
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  user   User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  job    Job?  @relation(fields: [jobId], references: [id])
+  emails EmailMessage[]
+
+  @@unique([userId, gmailThreadId])
+  @@index([userId, companyKey])
+  @@index([userId, lastEmailAt])
 }
 
 model Job {
@@ -32,6 +71,7 @@ model Job {
 
   user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   events      JobEvent[]
+  emailGroups EmailGroup[]
 
   @@unique([userId, company, position])
   @@index([userId])
@@ -61,15 +101,19 @@ model JobEvent {
 }
 
 model EmailMessage {
-  id          String      @id @default(cuid())
-  subject     String
-  body        String      @db.Text
-  sender      String
-  receivedAt  DateTime    @default(now())
-  rawHeaders  Json?
-  createdAt   DateTime    @default(now())
+  id             String      @id @default(cuid())
+  subject        String
+  body           String      @db.Text
+  sender         String
+  receivedAt     DateTime    @default(now())
+  rawHeaders     Json?
+  gmailMessageId String?     @unique
+  gmailThreadId  String?
+  groupId        String?
+  createdAt      DateTime    @default(now())
 
-  jobEvent    JobEvent?
+  jobEvent JobEvent?
+  group    EmailGroup? @relation(fields: [groupId], references: [id])
 }
 
 enum EventType {

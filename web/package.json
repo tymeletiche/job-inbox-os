@@ -16,6 +16,9 @@
   "description": "",
   "dependencies": {
     "@prisma/client": "^5.22.0",
+    "@types/html-to-text": "^9.0.4",
+    "googleapis": "^171.4.0",
+    "html-to-text": "^9.0.5",
     "next": "^16.1.6",
     "prisma": "^5.22.0",
     "react": "^19.2.4",
