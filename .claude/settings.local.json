@@ -20,7 +20,13 @@
       "Bash(npm run prisma:*)",
       "Bash(npm run dev:*)",
       "Bash(curl:*)",
-      "Bash(python3:*)"
+      "Bash(python3:*)",
+      "Bash(git fetch:*)",
+      "Bash(git push:*)",
+      "Bash(docker-compose ps:*)",
+      "Bash(ps:*)",
+      "Bash(docker-compose down:*)",
+      "Bash(kill:*)"
     ]
   }
 }
