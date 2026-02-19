@@ -301,13 +301,13 @@ export const OFFER_FIXTURES: TestFixture[] = [
   {
     name: 'Offer with benefits',
     input: email(
-      'Congratulations!',
-      'Pleased to inform you that we would like to extend an offer for the Engineering Manager position. Your benefits package includes health insurance, 401k matching, and stock options.',
+      'Your Offer - Engineering Manager',
+      'Pleased to inform you that we would like to extend an offer for the Engineering Manager position. Your annual compensation includes a base salary of $195,000 and a signing bonus. We are excited to welcome aboard a talented leader.',
       'hr@techcorp.com',
     ),
     expectedType: 'OFFER',
     minConfidence: 0.5,
-    description: 'Offer highlighting benefits package',
+    description: 'Offer highlighting compensation details',
   },
 ];
 
@@ -545,5 +545,61 @@ export const EDGE_CASE_FIXTURES: TestFixture[] = [
     expectedType: 'RECRUITER_OUTREACH',
     minConfidence: 0.3,
     description: 'Recruiter domain + outreach language should win over interview language',
+  },
+  // ── FALSE POSITIVE GUARDS ──
+  {
+    name: 'Generic work email (not job-related)',
+    input: email(
+      'Q1 Planning Meeting Notes',
+      'Hi team, attached are the notes from our Q1 planning session. Please review the action items and let me know if you have any questions. The next sync is scheduled for Friday.',
+      'manager@currentjob.com',
+    ),
+    expectedType: 'OTHER',
+    minConfidence: 0,
+    description: 'Internal work email should not be classified as a job event',
+  },
+  {
+    name: 'Newsletter / job alert digest',
+    input: email(
+      '15 new Software Engineer jobs for you',
+      'Based on your job search preferences, here are new jobs matching your criteria. Senior Engineer at Google, Staff Engineer at Meta. View all recommended jobs. Manage your notifications. Unsubscribe from job alerts.',
+      'alerts@linkedin.com',
+    ),
+    expectedType: 'OTHER',
+    minConfidence: 0,
+    description: 'Job alert digest with unsubscribe should be OTHER not a specific event',
+  },
+  {
+    name: 'Spam with congratulations',
+    input: email(
+      'Congratulations! You have been selected',
+      'You have been selected for our exclusive program. Click here to claim your reward. This is a limited time offer. Act now!',
+      'promo@sketchy-marketing.com',
+    ),
+    expectedType: 'OTHER',
+    minConfidence: 0,
+    description: 'Spam email should not be classified as a job offer',
+  },
+  {
+    name: 'Personal email mentioning job search',
+    input: email(
+      'Dinner this weekend?',
+      'Hey! Are you free Saturday? I know you have been interviewing at a few places. How is the job search going? Let me know if you want to grab dinner and catch up.',
+      'friend@gmail.com',
+    ),
+    expectedType: 'OTHER',
+    minConfidence: 0,
+    description: 'Personal email should not trigger job classification',
+  },
+  {
+    name: 'Internal HR benefits enrollment',
+    input: email(
+      'Benefits enrollment reminder',
+      'This is a reminder that open enrollment for your benefits closes on March 1st. Please review your health insurance and 401k selections. Contact HR with questions.',
+      'hr@currentemployer.com',
+    ),
+    expectedType: 'OTHER',
+    minConfidence: 0,
+    description: 'Internal HR email about benefits should not be classified as offer',
   },
 ];
