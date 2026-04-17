@@ -27,6 +27,112 @@ const NEWSLETTER_SIGNALS: string[] = [
   'view in browser',
 ];
 
+// Signals that the email is NOT about a job application/hiring process.
+// Each match applies a -2.0 penalty to ALL event type scores.
+const NON_JOB_CONTEXT_SIGNALS: string[] = [
+  // Real estate & property
+  'your property',
+  'property at',
+  'property assessment',
+  'your home',
+  'real estate',
+  'closing costs',
+  'mortgage',
+  // Financial products
+  'credit card',
+  'store card',
+  'redcard',
+  'auto loan',
+  'loan application',
+  'apr',
+  'financing at',
+  'insurance claim',
+  'insurance quote',
+  'insurance policy',
+  // Education (non-job)
+  'fall semester',
+  'spring semester',
+  'admission',
+  'admissions committee',
+  'scholarship',
+  'financial aid',
+  'tuition',
+  // Memberships & subscriptions
+  'gym',
+  'membership application',
+  'fitness',
+  // Volunteering
+  'volunteer program',
+  'volunteer position',
+  'volunteer for',
+  'volunteer opportunity',
+  'volunteering',
+  'habitat for humanity',
+  'canvassing',
+  // Pets & animals
+  'dog adoption',
+  'cat adoption',
+  'pet adoption',
+  'adopt',
+  // Health & medical
+  'health assessment',
+  'health screening',
+  'cognitive health',
+  'annual health',
+  'wellness',
+  // E-commerce & sales
+  'off everything',
+  '% off',
+  'expires at midnight',
+  'promo code',
+  'discount',
+  'sale ends',
+  'loyalty',
+  // Podcasts & media
+  'listen now',
+  'new episode',
+  'podcast',
+  'this week\'s episode',
+  // Coaching & workshops
+  'mock interview',
+  'career coaching',
+  'coaching session',
+  'interview techniques',
+  'workshop',
+  // Surveys & feedback
+  'valued customer',
+  'as a customer',
+  'customer feedback',
+  'feedback interview',
+  'customer survey',
+  // Apartment & rental
+  'apartment',
+  'unit ',
+  'leasing',
+  'rental',
+  // Conferences & speaking
+  'speaker',
+  'speak at',
+  'panel discussion',
+  'conference',
+  'register now',
+  // Business deals (non-job)
+  'acquire your',
+  'acquire our',
+  'business acquisition',
+  'due diligence',
+  'buy your',
+  // Political
+  'campaign',
+  'canvassing',
+  'political',
+  // Freelance platforms
+  'upwork',
+  'freelance',
+  'fiverr',
+  'project opportunity',
+];
+
 export function normalizeText(text: string): string {
   return text.toLowerCase().trim().replace(/\s+/g, ' ');
 }
@@ -107,6 +213,22 @@ export function scoreEventType(
   if (eventType === 'APPLICATION_RECEIVED' && isNoreplyAddress(sender)) {
     totalScore += 0.5;
     matches.push(`[noreply] ${sender}`);
+  }
+
+  // Non-job context penalty: -3.0 per signal
+  const fullText = normalizeText(`${subject} ${body}`);
+  let nonJobHits = 0;
+  for (const signal of NON_JOB_CONTEXT_SIGNALS) {
+    if (fullText.includes(signal)) {
+      nonJobHits++;
+      totalScore -= 3.0;
+      matches.push(`[non-job] ${signal}`);
+    }
+  }
+  // Extra penalty when multiple non-job signals found: very likely not a job email
+  if (nonJobHits >= 2) {
+    totalScore -= 3.0;
+    matches.push(`[non-job-multi] ${nonJobHits} signals`);
   }
 
   return { rawScore: Math.max(0, totalScore), matches };

@@ -19,6 +19,8 @@ import {
   FALSE_POSITIVE_FIXTURES,
   EDGE_CASE_EXPANDED,
   ADDITIONAL_FIXTURES,
+  ADVERSARIAL_REAL_JOB_FIXTURES,
+  ADVERSARIAL_JUNK_FIXTURES,
   TestFixture,
 } from './fixtures/emails';
 
@@ -111,6 +113,27 @@ describe('classifyEmail', () => {
 
   describe('additional coverage', () => {
     runFixtures(ADDITIONAL_FIXTURES);
+  });
+
+  describe('adversarial: real job emails', () => {
+    runFixtures(ADVERSARIAL_REAL_JOB_FIXTURES);
+  });
+
+  describe('adversarial: tricky junk emails', () => {
+    runFixtures(ADVERSARIAL_JUNK_FIXTURES);
+  });
+
+  describe('real-world regression', () => {
+    it('Paylocity rejection email should be REJECTION', () => {
+      const result = classifyEmail({
+        subject: 'Intern-Full Stack Software Engineer',
+        body: 'Dear Tyler, Thank you for your interest in our open position, Intern-Full Stack Software Engineer. We regret to inform you that you have not been selected for further consideration. We wish you success with your job search and thank you for your interest. Sincerely, North Atlantic Industries, Inc. This email is only for the person(s) addressed. Privacy Policy | Unsubscribe',
+        sender: 'do-not-reply@mail.paylocity.com',
+      });
+      expect(result.eventType).toBe('REJECTION');
+      expect(result.confidence).toBeGreaterThanOrEqual(0.2);
+      expect(result.extractedData.company).toBe('North Atlantic Industries');
+    });
   });
 
   describe('scoring behavior', () => {

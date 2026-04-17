@@ -20,6 +20,12 @@ const ATS_DOMAINS: string[] = [
   'app.dover.io',
   'wellfound.com',
   'rippling.com',
+  'paylocity.com',
+  'paycom.com',
+  'adp.com',
+  'ultipro.com',
+  'ceridian.com',
+  'successfactors.com',
 ];
 
 const RECRUITER_DOMAINS: string[] = [

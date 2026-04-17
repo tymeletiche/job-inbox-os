@@ -1412,9 +1412,9 @@ export const FALSE_POSITIVE_FIXTURES: TestFixture[] = [
       'Thank you for submitting your application to our graduate program. We have received your application materials and will review them carefully. Admissions decisions will be made by April.',
       'admissions@university.edu',
     ),
-    expectedType: 'APPLICATION_RECEIVED',
-    minConfidence: 0.25,
-    description: 'University application uses same language - may classify as APPLICATION_RECEIVED',
+    expectedType: 'OTHER',
+    minConfidence: 0,
+    description: 'University admissions should be OTHER, not job APPLICATION_RECEIVED',
   },
   {
     name: 'Government DMV notification',
@@ -1915,9 +1915,9 @@ export const ADDITIONAL_FIXTURES: TestFixture[] = [
       'Thank you for submitting your rental application for unit 5B at 123 Oak Street. We will review your credit and references and get back to you within 48 hours.',
       'leasing@apartments.com',
     ),
-    expectedType: 'APPLICATION_RECEIVED',
-    minConfidence: 0.25,
-    description: 'Rental application uses same language - may match APPLICATION_RECEIVED',
+    expectedType: 'OTHER',
+    minConfidence: 0,
+    description: 'Rental application should be OTHER, not job APPLICATION_RECEIVED',
   },
   // More edge cases
   {
@@ -1996,5 +1996,572 @@ export const ADDITIONAL_FIXTURES: TestFixture[] = [
     expectedType: 'RECRUITER_OUTREACH',
     minConfidence: 0.3,
     description: 'WeWorkRemotely platform job match',
+  },
+];
+
+// ─── ADVERSARIAL FIXTURES: REAL JOB EMAILS (should classify correctly) ──────
+
+export const ADVERSARIAL_REAL_JOB_FIXTURES: TestFixture[] = [
+  // APPLICATION_RECEIVED (5)
+  {
+    name: 'Minimal ATS confirmation',
+    input: email(
+      'Your application',
+      'Hi, we received your application for the Data Analyst role. Our team is reviewing your qualifications and we will be in touch.',
+      'noreply@company.com',
+    ),
+    expectedType: 'APPLICATION_RECEIVED',
+    minConfidence: 0.2,
+    description: 'Short confirmation with minimal keywords',
+  },
+  {
+    name: 'Application via job board',
+    input: email(
+      'Application submitted successfully',
+      'Your application for Backend Engineer at Datadog has been submitted successfully through our careers portal. You will receive updates as your application progresses.',
+      'careers@datadog.com',
+    ),
+    expectedType: 'APPLICATION_RECEIVED',
+    minConfidence: 0.3,
+    description: 'Job board submission confirmation',
+  },
+  {
+    name: 'Resume received acknowledgement',
+    input: email(
+      'We have received your resume',
+      'Thank you for your interest in the Product Manager position at Notion. Your resume has been received and is being reviewed by our hiring team.',
+      'hiring@notion.so',
+    ),
+    expectedType: 'APPLICATION_RECEIVED',
+    minConfidence: 0.3,
+    description: 'Resume receipt acknowledgement',
+  },
+  {
+    name: 'Application under review',
+    input: email(
+      'Application status: received',
+      'Your application for Senior Frontend Developer at Vercel is now under review. We appreciate your interest and will update you on the next steps.',
+      'no-reply@vercel.com',
+    ),
+    expectedType: 'APPLICATION_RECEIVED',
+    minConfidence: 0.3,
+    description: 'Application status update - received',
+  },
+  {
+    name: 'Thank you for applying',
+    input: email(
+      'Thank you for your interest',
+      'Thank you for applying to the DevOps Engineer role at Cloudflare. We look forward to reviewing your application and will reach out if there is a fit.',
+      'talent@cloudflare.com',
+    ),
+    expectedType: 'APPLICATION_RECEIVED',
+    minConfidence: 0.2,
+    description: 'Generic thank you for applying',
+  },
+  // INTERVIEW_REQUEST (4)
+  {
+    name: 'Casual phone screen request',
+    input: email(
+      'Next steps - Software Engineer',
+      'Hi! We reviewed your application and would love to chat. Would you be available for a 30-minute phone screen this week? Please share your availability.',
+      'recruiter@stripe.com',
+    ),
+    expectedType: 'INTERVIEW_REQUEST',
+    minConfidence: 0.3,
+    description: 'Informal phone screen invitation',
+  },
+  {
+    name: 'Hiring manager wants to talk',
+    input: email(
+      'Interview opportunity at Figma',
+      'The hiring manager for the Design Engineer role would like to set up a time to speak with you. When are you free next week for a 45-minute conversation?',
+      'talent@figma.com',
+    ),
+    expectedType: 'INTERVIEW_REQUEST',
+    minConfidence: 0.3,
+    description: 'Hiring manager direct outreach',
+  },
+  {
+    name: 'Moving to next round',
+    input: email(
+      'Next step in your application',
+      'Congratulations! We are excited to move forward with your application for the ML Engineer position. We would like to schedule an interview with our technical team. Please provide your availability for the coming week.',
+      'hr@anthropic.com',
+    ),
+    expectedType: 'INTERVIEW_REQUEST',
+    minConfidence: 0.3,
+    description: 'Advancing to interview stage',
+  },
+  {
+    name: 'Panel interview invitation',
+    input: email(
+      'Interview invitation - Senior SRE',
+      'We invite you to interview for the Senior SRE role at Netflix. This will be a panel interview with three team members. Please share your availability for a 2-hour block.',
+      'recruiting@netflix.com',
+    ),
+    expectedType: 'INTERVIEW_REQUEST',
+    minConfidence: 0.3,
+    description: 'Panel interview scheduling request',
+  },
+  // INTERVIEW_SCHEDULED (4)
+  {
+    name: 'Zoom meeting confirmed',
+    input: email(
+      'Interview confirmed - March 15',
+      'Your interview for the Platform Engineer role has been confirmed for March 15 at 2:00 PM EST. Join link: https://zoom.us/j/123456. You will be meeting with Sarah Chen, Engineering Director.',
+      'scheduling@airbnb.com',
+    ),
+    expectedType: 'INTERVIEW_SCHEDULED',
+    minConfidence: 0.3,
+    description: 'Confirmed Zoom interview with details',
+  },
+  {
+    name: 'On-site interview details',
+    input: email(
+      'Your upcoming interview at Apple',
+      'Your interview is confirmed for Monday at 10 AM at Apple Park. Please arrive at the visitor center 15 minutes early. The interview will take place on the second floor. Your interview panel includes 4 engineers.',
+      'hr@apple.com',
+    ),
+    expectedType: 'INTERVIEW_SCHEDULED',
+    minConfidence: 0.3,
+    description: 'On-site interview with logistics',
+  },
+  {
+    name: 'Calendar invite with Teams link',
+    input: email(
+      'Meeting confirmed: Technical Interview',
+      'A calendar invite has been sent for your technical interview on Thursday at 3 PM PST. Please join via Microsoft Teams meeting link below. Interview details and agenda are attached.',
+      'noreply@microsoft.com',
+    ),
+    expectedType: 'INTERVIEW_SCHEDULED',
+    minConfidence: 0.3,
+    description: 'Teams calendar invite for interview',
+  },
+  {
+    name: 'Final round scheduled',
+    input: email(
+      'Interview scheduled - Final Round',
+      'See you on Wednesday, March 20th at 11:00 AM for your final round interview. The meeting has been scheduled and you should receive a Google Meet link shortly. You will be meeting with the VP of Engineering.',
+      'talent@shopify.com',
+    ),
+    expectedType: 'INTERVIEW_SCHEDULED',
+    minConfidence: 0.3,
+    description: 'Final round with confirmation details',
+  },
+  // ASSESSMENT (3)
+  {
+    name: 'HackerRank timed challenge',
+    input: email(
+      'Complete your coding challenge',
+      'You have been invited to take a timed coding challenge on HackerRank for the Backend Engineer position at Uber. You have 72 hours to complete it. Assessment link: https://hackerrank.com/test/abc123',
+      'assessments@uber.com',
+    ),
+    expectedType: 'ASSESSMENT',
+    minConfidence: 0.3,
+    description: 'HackerRank with deadline',
+  },
+  {
+    name: 'Take-home project',
+    input: email(
+      'Take-home assignment - Full Stack Engineer',
+      'As the next step, please complete the following take-home assignment. Build a small REST API with the specifications attached. You have 5 days to submit. This is a coding test to evaluate your skills.',
+      'hiring@plaid.com',
+    ),
+    expectedType: 'ASSESSMENT',
+    minConfidence: 0.3,
+    description: 'Take-home project with instructions',
+  },
+  {
+    name: 'System design exercise',
+    input: email(
+      'Technical assessment - System Design',
+      'Please complete this system design exercise as part of your interview process. You will have a pair programming session afterwards to discuss your approach. Assessment deadline: March 10th.',
+      'talent@coinbase.com',
+    ),
+    expectedType: 'ASSESSMENT',
+    minConfidence: 0.3,
+    description: 'System design assessment',
+  },
+  // OFFER (3)
+  {
+    name: 'Formal offer letter',
+    input: email(
+      'Offer of employment - Staff Engineer',
+      'We are pleased to offer you the position of Staff Engineer at Databricks. Your starting salary will be $245,000 with an equity grant of 15,000 RSUs. Please review and sign the attached offer letter.',
+      'hr@databricks.com',
+    ),
+    expectedType: 'OFFER',
+    minConfidence: 0.3,
+    description: 'Full formal offer with compensation',
+  },
+  {
+    name: 'Verbal offer follow-up',
+    input: email(
+      'Your offer from Square',
+      'Following our conversation, we are delighted to extend a formal offer for the iOS Engineer role. The compensation package includes a base salary of $190,000, a signing bonus of $25,000, and annual compensation reviews.',
+      'people@squareup.com',
+    ),
+    expectedType: 'OFFER',
+    minConfidence: 0.3,
+    description: 'Written follow-up to verbal offer',
+  },
+  {
+    name: 'Startup equity offer',
+    input: email(
+      'Welcome to the team!',
+      'We are thrilled to offer you the role of Founding Engineer. Your offer includes equity grant of 0.5% and a base salary of $175K. This offer is contingent upon background check. Welcome aboard!',
+      'founders@startup.io',
+    ),
+    expectedType: 'OFFER',
+    minConfidence: 0.3,
+    description: 'Startup offer with equity',
+  },
+  // REJECTION (3)
+  {
+    name: 'Post-final-round rejection',
+    input: email(
+      'Update on your application',
+      'After careful consideration following your final round interviews, we have decided to pursue other candidates for the Senior Engineer role. We appreciate your time and effort throughout the process and wish you all the best.',
+      'recruiting@meta.com',
+    ),
+    expectedType: 'REJECTION',
+    minConfidence: 0.3,
+    description: 'Rejection after final interviews',
+  },
+  {
+    name: 'Position filled notification',
+    input: email(
+      'Regarding your application at Spotify',
+      'Thank you for your interest in the Data Engineer position. Unfortunately, the position has been filled. We will keep your resume on file and encourage you to apply again in the future.',
+      'careers@spotify.com',
+    ),
+    expectedType: 'REJECTION',
+    minConfidence: 0.3,
+    description: 'Position already filled',
+  },
+  {
+    name: 'Moved forward with others',
+    input: email(
+      'Your application status',
+      'We wanted to let you know that after reviewing all candidates, we have decided to move forward with other candidates whose experience more closely matched our needs. We are unable to offer you a position at this time.',
+      'hr@lyft.com',
+    ),
+    expectedType: 'REJECTION',
+    minConfidence: 0.3,
+    description: 'Generic moved forward with others',
+  },
+  // RECRUITER_OUTREACH (3)
+  {
+    name: 'LinkedIn recruiter InMail',
+    input: email(
+      'Exciting opportunity for you',
+      'I came across your profile on LinkedIn and was impressed by your background in distributed systems. I represent a top-tier company looking for a Principal Engineer. Would you be open to exploring new opportunities? Competitive compensation offered.',
+      'recruiter@linkedin.com',
+    ),
+    expectedType: 'RECRUITER_OUTREACH',
+    minConfidence: 0.3,
+    description: 'LinkedIn InMail style outreach',
+  },
+  {
+    name: 'Agency recruiter cold email',
+    input: email(
+      'Perfect fit for a role',
+      'I am reaching out regarding a potential opportunity with one of my clients. They are hiring for a Staff Backend Engineer and I thought of you for this role. On behalf of my client, I would love to have a conversation about this.',
+      'john@recruitingfirm.com',
+    ),
+    expectedType: 'RECRUITER_OUTREACH',
+    minConfidence: 0.3,
+    description: 'Third-party agency recruiter',
+  },
+  {
+    name: 'Internal recruiter from job board',
+    input: email(
+      'Your profile caught our attention',
+      'Our talent acquisition team came across your profile on Indeed. We have a confidential search for a VP of Engineering role that could be a great match for you. Are you currently looking?',
+      'talent@indeed.com',
+    ),
+    expectedType: 'RECRUITER_OUTREACH',
+    minConfidence: 0.3,
+    description: 'Indeed-sourced recruiter outreach',
+  },
+];
+
+// ─── ADVERSARIAL FIXTURES: TRICKY JUNK EMAILS (should classify as OTHER) ────
+
+export const ADVERSARIAL_JUNK_FIXTURES: TestFixture[] = [
+  {
+    name: 'Webinar interview with leaders',
+    input: email(
+      'Interview with Industry Leaders - Live Webinar',
+      'Join us for a live interview with top tech leaders discussing the future of AI. Register now for this exclusive panel discussion. Seats are limited. Unsubscribe from these emails.',
+      'events@techconference.com',
+    ),
+    expectedType: 'OTHER',
+    minConfidence: 0,
+    description: 'Webinar using "interview" in non-job context',
+  },
+  {
+    name: 'Career advice newsletter',
+    input: email(
+      '5 Tips to Ace Your Next Interview',
+      'In this week\'s newsletter: How to prepare for your next interview, tips for negotiating your offer, and how to follow up after a phone screen. View in browser. Manage your notifications.',
+      'newsletter@careercoach.com',
+    ),
+    expectedType: 'OTHER',
+    minConfidence: 0,
+    description: 'Newsletter about interviews, not an actual interview',
+  },
+  {
+    name: 'Store credit card application',
+    input: email(
+      'Your application for a Target RedCard',
+      'Your application for a Target RedCard store credit card has been received. We will review your application and notify you of our decision within 7-10 business days. Check your application status online.',
+      'noreply@target.com',
+    ),
+    expectedType: 'OTHER',
+    minConfidence: 0,
+    description: 'Credit card application using "application received" language',
+  },
+  {
+    name: 'Real estate offer',
+    input: email(
+      'Offer on your property at 123 Main St',
+      'We are pleased to offer $450,000 for your property. This offer is contingent upon inspection. Please review and sign the attached offer letter. The compensation includes closing costs.',
+      'agent@realestate.com',
+    ),
+    expectedType: 'OTHER',
+    minConfidence: 0,
+    description: 'Real estate offer mimicking job offer language',
+  },
+  {
+    name: 'Property assessment notice',
+    input: email(
+      'Assessment of your property',
+      'Your annual property assessment has been completed. The assessment deadline for appeals is March 15th. Please complete the assessment review form if you wish to contest the valuation.',
+      'noreply@county.gov',
+    ),
+    expectedType: 'OTHER',
+    minConfidence: 0,
+    description: 'Property tax assessment using "assessment" and "deadline"',
+  },
+  {
+    name: 'University application',
+    input: email(
+      'Application received - Fall 2026 Admission',
+      'Thank you for your interest in our MBA program. We have received your application for Fall 2026 admission. Your application is under review by the admissions committee.',
+      'admissions@stanford.edu',
+    ),
+    expectedType: 'OTHER',
+    minConfidence: 0,
+    description: 'University admissions using job application language',
+  },
+  {
+    name: 'Scholarship offer',
+    input: email(
+      'Scholarship offer from State University',
+      'We are pleased to offer you a merit-based scholarship of $15,000 per year. This offer of employment... just kidding, this is an academic scholarship. Please review and sign by April 1st.',
+      'finaid@stateuniversity.edu',
+    ),
+    expectedType: 'OTHER',
+    minConfidence: 0,
+    description: 'Scholarship using "pleased to offer" and "review and sign"',
+  },
+  {
+    name: 'Gym membership application',
+    input: email(
+      'Your membership application has been received',
+      'Thank you for applying to join FitLife Gym. Your application has been submitted successfully. We will review your application and schedule your assessment session within 48 hours.',
+      'info@fitlifegym.com',
+    ),
+    expectedType: 'OTHER',
+    minConfidence: 0,
+    description: 'Gym membership using "application received" and "schedule assessment"',
+  },
+  {
+    name: 'Podcast interview episode',
+    input: email(
+      'New episode: Interview with the CEO of TechCorp',
+      'This week\'s episode features an exclusive interview with TechCorp CEO about the future of hiring. We scheduled this interview months ago. Listen now on all platforms.',
+      'podcast@techpodcast.fm',
+    ),
+    expectedType: 'OTHER',
+    minConfidence: 0,
+    description: 'Podcast using "interview" and "scheduled"',
+  },
+  {
+    name: 'Mock interview coaching',
+    input: email(
+      'Let\'s schedule your mock interview',
+      'Your career coaching session is coming up. Let\'s schedule your mock interview for next week. We will also review your resume and discuss interview techniques. Please share your availability.',
+      'coach@careerservices.com',
+    ),
+    expectedType: 'OTHER',
+    minConfidence: 0,
+    description: 'Career coaching with "schedule interview" and "availability"',
+  },
+  {
+    name: 'Insurance claim assessment',
+    input: email(
+      'Assessment of your insurance claim',
+      'We have completed the assessment of your auto insurance claim #12345. The claims assessment deadline for additional documentation is March 20th. Please complete the assessment review.',
+      'claims@insurance.com',
+    ),
+    expectedType: 'OTHER',
+    minConfidence: 0,
+    description: 'Insurance using "assessment" and "deadline" heavily',
+  },
+  {
+    name: 'Volunteer application',
+    input: email(
+      'Application received - Volunteer Program',
+      'Thank you for applying to our volunteer program at Habitat for Humanity. We received your application and appreciate your interest. We will review your qualifications and be in touch.',
+      'volunteer@habitat.org',
+    ),
+    expectedType: 'OTHER',
+    minConfidence: 0,
+    description: 'Volunteer program using exact job application language',
+  },
+  {
+    name: 'Customer feedback interview',
+    input: email(
+      'We\'d like to schedule a call with you',
+      'As a valued customer, we would like to schedule a 30-minute feedback interview. Would you be available this week? Please share your availability. We\'d love to chat about your experience.',
+      'research@saasproduct.com',
+    ),
+    expectedType: 'OTHER',
+    minConfidence: 0,
+    description: 'Customer research using "schedule", "interview", "availability"',
+  },
+  {
+    name: 'Auto loan offer approved',
+    input: email(
+      'Your offer has been approved',
+      'Congratulations! Your auto loan application has been approved. We are pleased to offer you financing at 4.9% APR. This offer is valid for 30 days. Please review and sign the agreement.',
+      'loans@autofinance.com',
+    ),
+    expectedType: 'OTHER',
+    minConfidence: 0,
+    description: 'Auto loan using "offer approved", "pleased to offer", "review and sign"',
+  },
+  {
+    name: 'Interview skills workshop',
+    input: email(
+      'Interview Techniques Workshop - Register Now',
+      'Master your interview skills at our upcoming workshop. Practice with mock panel interviews, phone screen simulations, and learn to negotiate your offer. Free for members. Unsubscribe.',
+      'events@professionaldev.org',
+    ),
+    expectedType: 'OTHER',
+    minConfidence: 0,
+    description: 'Workshop about interviews, not an actual interview invitation',
+  },
+  {
+    name: 'Internal hiring newsletter',
+    input: email(
+      'New openings in Engineering',
+      'The Engineering team is hiring for 5 new positions. If you know anyone who would be a great match, please refer them. We are excited to move forward with growing the team. Manage your notifications.',
+      'internal@myemployer.com',
+    ),
+    expectedType: 'OTHER',
+    minConfidence: 0,
+    description: 'Internal company newsletter about hiring, not addressed to candidate',
+  },
+  {
+    name: 'Political volunteer outreach',
+    input: email(
+      'Reaching out regarding an exciting opportunity',
+      'We are reaching out regarding an exciting opportunity to volunteer for the upcoming campaign. Your profile caught our attention and we think you would be a perfect fit for our canvassing team.',
+      'outreach@campaign2026.org',
+    ),
+    expectedType: 'OTHER',
+    minConfidence: 0,
+    description: 'Political campaign using recruiter language',
+  },
+  {
+    name: 'Apartment application received',
+    input: email(
+      'Application received for Unit 4B',
+      'We have received your application for the apartment at 555 Oak Street, Unit 4B. Your application is under review. We will be in touch with next steps after reviewing your qualifications.',
+      'leasing@apartments.com',
+    ),
+    expectedType: 'OTHER',
+    minConfidence: 0,
+    description: 'Apartment rental using "application received" and "under review"',
+  },
+  {
+    name: 'Offer expires sale email',
+    input: email(
+      'This offer expires at midnight!',
+      'Don\'t miss out! This exclusive offer ends tonight. We are thrilled to offer you 40% off everything. Compensation for your loyalty: extra 10% off with code LOYAL. Welcome aboard the savings train!',
+      'deals@retailstore.com',
+    ),
+    expectedType: 'OTHER',
+    minConfidence: 0,
+    description: 'E-commerce sale using "offer", "thrilled to offer", "welcome aboard"',
+  },
+  {
+    name: 'Health screening assessment',
+    input: email(
+      'Schedule your health assessment',
+      'It\'s time for your annual health assessment. Please complete the online assessment at the link below. You have 14 days to complete this assessment. Skills test for cognitive health included.',
+      'wellness@healthplan.com',
+    ),
+    expectedType: 'OTHER',
+    minConfidence: 0,
+    description: 'Health screening using "assessment", "complete", "skills test"',
+  },
+  {
+    name: 'Conference speaker invitation',
+    input: email(
+      'Invitation to speak at TechSummit 2026',
+      'We would like to invite you to a panel discussion at TechSummit 2026. We came across your profile and were impressed by your background. Would you be open to exploring this opportunity?',
+      'speakers@techsummit.com',
+    ),
+    expectedType: 'OTHER',
+    minConfidence: 0,
+    description: 'Speaker invitation using recruiter outreach language',
+  },
+  {
+    name: 'Pet adoption application',
+    input: email(
+      'Application submitted - Dog Adoption',
+      'Thank you for submitting your application to adopt Max. Your application has been submitted successfully and is being reviewed. We look forward to reviewing your application.',
+      'adoptions@shelter.org',
+    ),
+    expectedType: 'OTHER',
+    minConfidence: 0,
+    description: 'Pet adoption using "application submitted" heavily',
+  },
+  {
+    name: 'Offer to buy your business',
+    input: email(
+      'Offer to acquire your company',
+      'We are pleased to offer to acquire your SaaS business. The compensation package includes $2M upfront plus an equity grant in the parent company. Contingent upon due diligence. Please review and sign.',
+      'deals@acquirer.com',
+    ),
+    expectedType: 'OTHER',
+    minConfidence: 0,
+    description: 'Business acquisition using offer + compensation + equity language',
+  },
+  {
+    name: 'Freelance platform notification',
+    input: email(
+      'New project opportunity matching your skills',
+      'A client on Upwork is hiring for a project that matches your profile. This potential opportunity pays $150/hr. Would you be interested in connecting? Talent acquisition is competitive.',
+      'notifications@upwork.com',
+    ),
+    expectedType: 'OTHER',
+    minConfidence: 0,
+    description: 'Freelance platform using recruiter and hiring language',
+  },
+  {
+    name: 'Job search tips with interview language',
+    input: email(
+      'Your weekly job search update',
+      'Here are 10 new jobs matching your search. Tips for this week: how to schedule an interview, what to do when you receive your application confirmation, and how to negotiate an offer letter. View in browser. Unsubscribe.',
+      'alerts@jobboard.com',
+    ),
+    expectedType: 'OTHER',
+    minConfidence: 0,
+    description: 'Job board newsletter stuffed with every event type keyword',
   },
 ];

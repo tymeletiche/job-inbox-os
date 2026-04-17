@@ -42,6 +42,8 @@ const COMPANY_PATTERNS: RegExp[] = [
   /\bwith\s+([A-Z][A-Za-z0-9\s&.\-]+?)(?:\s*[,.:;]|\s+[a-z])/,
   // "Google is pleased to", "Amazon would like to"
   /\b([A-Z][A-Za-z0-9\s&.\-]{1,30}?)\s+(?:is pleased|would like|is excited|has reviewed|is delighted)/,
+  // "Sincerely, North Atlantic Industries, Inc." / "Regards, Company Name"
+  /\b(?:sincerely|regards|best regards|best wishes|warm regards),?\s*\n?\s*([A-Z][A-Za-z0-9\s&.\-]+?)(?:\s*,\s*(?:Inc|LLC|Ltd|Corp)\.?|\s*\.?\s*$|\s*\n)/im,
 ];
 
 // Position extraction patterns
