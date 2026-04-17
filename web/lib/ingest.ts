@@ -22,16 +22,26 @@ export interface IngestResult {
   classification: ClassifierOutput;
 }
 
+export interface IngestSkippedResult {
+  skippedReason: 'low_confidence';
+  classification: ClassifierOutput;
+}
+
 function normalizeCompanyKey(company: string | undefined): string | null {
   if (!company || company === 'Unknown Company') return null;
   return company.toLowerCase().trim();
 }
 
-export async function ingestEmail(input: IngestEmailInput): Promise<IngestResult> {
+export async function ingestEmail(input: IngestEmailInput, options?: { minConfidence?: number }): Promise<IngestResult | IngestSkippedResult> {
   const { subject, body, sender, userId, gmailMessageId, gmailThreadId } = input;
 
   // 1. Classify
   const classification = classifyEmail({ subject, body, sender });
+
+  // Check minimum confidence threshold
+  if (options?.minConfidence !== undefined && classification.confidence < options.minConfidence) {
+    return { skippedReason: 'low_confidence', classification };
+  }
 
   const company = classification.extractedData.company || 'Unknown Company';
   const position = classification.extractedData.position || 'Unknown Position';

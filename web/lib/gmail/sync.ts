@@ -5,9 +5,12 @@ import { parseGmailMessage } from './parse';
 import { gmailHtmlToText } from './html-to-text';
 import { ingestEmail } from '@/lib/ingest';
 
+const MIN_CONFIDENCE = 0.2;
+
 export interface SyncResult {
   ingested: number;
   skipped: number;
+  filtered: number;
   errors: number;
   total: number;
 }
@@ -15,6 +18,7 @@ export interface SyncResult {
 /**
  * Sync Gmail messages for a user.
  * Fetches recent messages, deduplicates, classifies, and ingests.
+ * Only ingests emails with classifier confidence >= MIN_CONFIDENCE.
  */
 export async function syncGmailMessages(userId: string): Promise<SyncResult> {
   const client = await getAuthenticatedClient(userId);
@@ -33,6 +37,7 @@ export async function syncGmailMessages(userId: string): Promise<SyncResult> {
   const messageRefs = listResponse.data.messages || [];
   let ingested = 0;
   let skipped = 0;
+  let filtered = 0;
   let errors = 0;
 
   // 2. Process each message
@@ -67,17 +72,24 @@ export async function syncGmailMessages(userId: string): Promise<SyncResult> {
         continue;
       }
 
-      // Ingest through the shared pipeline
-      await ingestEmail({
-        subject: parsed.subject,
-        body: body || parsed.subject,
-        sender: parsed.sender,
-        userId,
-        gmailMessageId: parsed.gmailMessageId,
-        gmailThreadId: parsed.gmailThreadId,
-      });
+      // Ingest through the shared pipeline with confidence threshold
+      const result = await ingestEmail(
+        {
+          subject: parsed.subject,
+          body: body || parsed.subject,
+          sender: parsed.sender,
+          userId,
+          gmailMessageId: parsed.gmailMessageId,
+          gmailThreadId: parsed.gmailThreadId,
+        },
+        { minConfidence: MIN_CONFIDENCE }
+      );
 
-      ingested++;
+      if ('skippedReason' in result) {
+        filtered++;
+      } else {
+        ingested++;
+      }
     } catch (err) {
       console.error(`Failed to process Gmail message ${gmailMessageId}:`, err);
       errors++;
@@ -90,5 +102,5 @@ export async function syncGmailMessages(userId: string): Promise<SyncResult> {
     data: { lastSyncAt: new Date() },
   });
 
-  return { ingested, skipped, errors, total: messageRefs.length };
+  return { ingested, skipped, filtered, errors, total: messageRefs.length };
 }

@@ -1,46 +1,61 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { EventType, EventStatus } from '@prisma/client';
+import EventCard, { JobEventData } from '@/components/event-card';
+import EmptyState from '@/components/empty-state';
+import SearchInput from '@/components/search-input';
+import Pagination from '@/components/pagination';
 
-interface JobEvent {
-  id: string;
-  type: EventType;
-  status: EventStatus;
-  createdAt: string;
-  job: {
-    company: string;
-    position: string;
-  };
-  emailMessage: {
-    subject: string;
-    body: string;
-    sender: string;
-  } | null;
-}
+const EVENT_TYPES: EventType[] = [
+  'APPLICATION_RECEIVED', 'INTERVIEW_REQUEST', 'INTERVIEW_SCHEDULED',
+  'ASSESSMENT', 'OFFER', 'REJECTION', 'RECRUITER_OUTREACH', 'OTHER',
+];
+
+const VALID_STATUSES: EventStatus[] = ['PENDING', 'CONFIRMED', 'REJECTED'];
 
 export default function ReviewPage() {
-  const [events, setEvents] = useState<JobEvent[]>([]);
+  const searchParams = useSearchParams();
+  const initialStatus = VALID_STATUSES.includes(searchParams.get('status') as EventStatus)
+    ? (searchParams.get('status') as EventStatus)
+    : 'PENDING';
+
+  const [events, setEvents] = useState<JobEventData[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<EventStatus>('PENDING');
+  const [filter, setFilter] = useState<EventStatus>(initialStatus);
+  const [search, setSearch] = useState('');
+  const [typeFilter, setTypeFilter] = useState('');
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
 
-  useEffect(() => {
-    fetchEvents(filter);
-  }, [filter]);
-
-  const fetchEvents = async (status: EventStatus) => {
+  const fetchEvents = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/review?status=${status}`);
+      const params = new URLSearchParams({ status: filter, page: String(page) });
+      if (search) params.set('search', search);
+      if (typeFilter) params.set('type', typeFilter);
+
+      const res = await fetch(`/api/review?${params}`);
       const data = await res.json();
       setEvents(data.events || []);
+      setTotalPages(data.totalPages || 1);
     } catch (error) {
       console.error('Failed to fetch events:', error);
       setEvents([]);
     } finally {
       setLoading(false);
     }
-  };
+  }, [filter, search, typeFilter, page]);
+
+  useEffect(() => {
+    fetchEvents();
+  }, [fetchEvents]);
+
+  // Reset page when filters change
+  useEffect(() => {
+    setPage(1);
+  }, [filter, search, typeFilter]);
 
   const handleAction = async (eventId: string, action: 'CONFIRM' | 'REJECT') => {
     try {
@@ -49,118 +64,73 @@ export default function ReviewPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ eventId, action }),
       });
-
-      // Optimistic update
       setEvents(events.filter((e) => e.id !== eventId));
     } catch (error) {
       console.error('Failed to update event:', error);
     }
   };
 
-  const formatEventType = (type: EventType) => {
-    return type.replace(/_/g, ' ');
-  };
-
-  const getEventTypeBadgeColor = (type: EventType) => {
-    switch (type) {
-      case 'OFFER':
-        return 'bg-green-100 text-green-800';
-      case 'REJECTION':
-        return 'bg-red-100 text-red-800';
-      case 'INTERVIEW_REQUEST':
-      case 'INTERVIEW_SCHEDULED':
-        return 'bg-blue-100 text-blue-800';
-      case 'ASSESSMENT':
-        return 'bg-purple-100 text-purple-800';
-      case 'APPLICATION_RECEIVED':
-        return 'bg-gray-100 text-gray-800';
-      case 'RECRUITER_OUTREACH':
-        return 'bg-yellow-100 text-yellow-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
-    }
-  };
-
   return (
-    <div className="min-h-screen bg-gray-50 p-8">
-      <div className="max-w-4xl mx-auto">
-        <div className="flex justify-between items-center mb-8">
-          <h1 className="text-3xl font-bold">Review Queue</h1>
-          <div className="flex gap-2">
-            {(['PENDING', 'CONFIRMED', 'REJECTED'] as EventStatus[]).map((status) => (
-              <button
-                key={status}
-                onClick={() => setFilter(status)}
-                className={`px-4 py-2 rounded ${
-                  filter === status
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
-                }`}
-              >
-                {status}
-              </button>
-            ))}
-          </div>
+    <div>
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-2xl font-bold">Review Queue</h1>
+        <div className="flex gap-1">
+          {([['PENDING', 'Pending'], ['CONFIRMED', 'Confirmed'], ['REJECTED', 'Dismissed']] as const).map(([status, label]) => (
+            <button
+              key={status}
+              onClick={() => setFilter(status as EventStatus)}
+              className={`px-3 py-1.5 rounded text-sm font-medium ${
+                filter === status
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-white text-gray-600 border border-gray-300 hover:bg-gray-50'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
         </div>
-
-        {loading ? (
-          <p className="text-gray-500">Loading...</p>
-        ) : events.length === 0 ? (
-          <p className="text-gray-500">No events found.</p>
-        ) : (
-          <div className="space-y-4">
-            {events.map((event) => (
-              <div key={event.id} className="bg-white rounded-lg shadow p-6">
-                <div className="flex justify-between items-start mb-4">
-                  <span
-                    className={`inline-block px-3 py-1 text-sm font-semibold rounded ${getEventTypeBadgeColor(
-                      event.type
-                    )}`}
-                  >
-                    {formatEventType(event.type)}
-                  </span>
-                  <span className="text-sm text-gray-500">
-                    {new Date(event.createdAt).toLocaleDateString()}
-                  </span>
-                </div>
-
-                {event.emailMessage && (
-                  <div className="mb-4">
-                    <p className="text-sm text-gray-600">From: {event.emailMessage.sender}</p>
-                    <p className="font-semibold mt-1">{event.emailMessage.subject}</p>
-                    <p className="text-gray-700 mt-2">
-                      {event.emailMessage.body.substring(0, 200)}
-                      {event.emailMessage.body.length > 200 ? '...' : ''}
-                    </p>
-                  </div>
-                )}
-
-                <div className="mb-4 p-3 bg-gray-50 rounded">
-                  <p className="font-semibold text-sm">{event.job.company}</p>
-                  <p className="text-sm text-gray-600">{event.job.position}</p>
-                </div>
-
-                {filter === 'PENDING' && (
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => handleAction(event.id, 'CONFIRM')}
-                      className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
-                    >
-                      Confirm
-                    </button>
-                    <button
-                      onClick={() => handleAction(event.id, 'REJECT')}
-                      className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
-                    >
-                      Reject
-                    </button>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
       </div>
+
+      {/* Search and type filter */}
+      <div className="flex gap-3 mb-4">
+        <SearchInput
+          value={search}
+          onChange={setSearch}
+          placeholder="Search company or position..."
+        />
+        <select
+          value={typeFilter}
+          onChange={(e) => setTypeFilter(e.target.value)}
+          className="px-3 py-1.5 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-200"
+        >
+          <option value="">All types</option>
+          {EVENT_TYPES.map((type) => (
+            <option key={type} value={type}>
+              {type.replace(/_/g, ' ')}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {loading ? (
+        <p className="text-gray-500">Loading...</p>
+      ) : events.length === 0 ? (
+        <EmptyState message="No events found." />
+      ) : (
+        <div className="space-y-3">
+          {events.map((event) => (
+            <EventCard
+              key={event.id}
+              event={event}
+              showActions={filter === 'PENDING'}
+              onConfirm={(id) => handleAction(id, 'CONFIRM')}
+              onDismiss={(id) => handleAction(id, 'REJECT')}
+            />
+          ))}
+        </div>
+      )}
+
+      <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
     </div>
   );
 }
