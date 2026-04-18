@@ -1,196 +1,134 @@
-'use client';
+import Link from 'next/link';
 
-import { useEffect, useState } from 'react';
-import { EventType } from '@prisma/client';
-import StatCard from '@/components/stat-card';
-import EventCard, { JobEventData } from '@/components/event-card';
-import EventTypeBadge from '@/components/event-type-badge';
-import EmptyState from '@/components/empty-state';
-
-interface DashboardStats {
-  pendingEvents: number;
-  confirmedEvents: number;
-  rejectedEvents: number;
-  totalJobs: number;
-  eventsByType: Record<string, number>;
-  recentEvents: JobEventData[];
-}
-
-interface GmailStatus {
-  connected: boolean;
-  email?: string;
-  lastSyncAt?: string;
-}
-
-interface SyncResult {
-  success: boolean;
-  ingested: number;
-  skipped: number;
-  filtered: number;
-  errors: number;
-  total: number;
-}
-
-const EVENT_TYPES: EventType[] = [
-  'APPLICATION_RECEIVED', 'INTERVIEW_REQUEST', 'INTERVIEW_SCHEDULED',
-  'ASSESSMENT', 'OFFER', 'REJECTION', 'RECRUITER_OUTREACH', 'OTHER',
-];
-
-export default function DashboardPage() {
-  const [stats, setStats] = useState<DashboardStats | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [gmailStatus, setGmailStatus] = useState<GmailStatus | null>(null);
-  const [syncing, setSyncing] = useState(false);
-  const [syncResult, setSyncResult] = useState<SyncResult | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    fetch('/api/dashboard/stats')
-      .then((res) => res.json())
-      .then(setStats)
-      .catch(console.error)
-      .finally(() => setLoading(false));
-
-    fetch('/api/gmail/status')
-      .then((res) => res.json())
-      .then(setGmailStatus)
-      .catch(() => setGmailStatus({ connected: false }));
-
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('gmail_connected') === 'true') {
-      setError(null);
-      fetch('/api/gmail/status').then((res) => res.json()).then(setGmailStatus);
-      window.history.replaceState({}, '', '/');
-    }
-    if (params.get('gmail_error')) {
-      setError(`Gmail connection failed: ${params.get('gmail_error')}`);
-      window.history.replaceState({}, '', '/');
-    }
-  }, []);
-
-  async function handleSync() {
-    setSyncing(true);
-    setSyncResult(null);
-    setError(null);
-    try {
-      const res = await fetch('/api/gmail/sync', { method: 'POST' });
-      const data = await res.json();
-      if (!res.ok) {
-        setError(data.error || 'Sync failed');
-      } else {
-        setSyncResult(data);
-        const statusRes = await fetch('/api/gmail/status');
-        setGmailStatus(await statusRes.json());
-        // Refresh stats after sync
-        const statsRes = await fetch('/api/dashboard/stats');
-        setStats(await statsRes.json());
-      }
-    } catch {
-      setError('Network error during sync');
-    } finally {
-      setSyncing(false);
-    }
-  }
-
-  if (loading) {
-    return <p className="text-gray-500">Loading...</p>;
-  }
-
+export default function LandingPage() {
   return (
     <div>
-      <h1 className="text-2xl font-bold mb-6">Dashboard</h1>
-
-      {/* Stat cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-        <StatCard label="Pending Events" value={stats?.pendingEvents ?? 0} href="/review" />
-        <StatCard label="Confirmed" value={stats?.confirmedEvents ?? 0} href="/review?status=CONFIRMED" />
-        <StatCard label="Dismissed" value={stats?.rejectedEvents ?? 0} href="/review?status=REJECTED" />
-        <StatCard label="Jobs Tracked" value={stats?.totalJobs ?? 0} href="/jobs" />
-      </div>
-
-      {/* Events by type */}
-      <div className="bg-white rounded-lg shadow p-5 mb-8">
-        <h2 className="text-sm font-semibold text-gray-700 mb-3">Events by Type</h2>
-        <div className="flex flex-wrap gap-3">
-          {EVENT_TYPES.map((type) => {
-            const count = stats?.eventsByType[type] ?? 0;
-            if (count === 0) return null;
-            return (
-              <div key={type} className="flex items-center gap-1.5">
-                <EventTypeBadge type={type} />
-                <span className="text-sm text-gray-600 font-medium">{count}</span>
-              </div>
-            );
-          })}
-          {EVENT_TYPES.every((type) => (stats?.eventsByType[type] ?? 0) === 0) && (
-            <p className="text-sm text-gray-400">No events yet</p>
-          )}
-        </div>
-      </div>
-
-      {/* Recent events */}
-      <div className="mb-8">
-        <h2 className="text-sm font-semibold text-gray-700 mb-3">Recent Events</h2>
-        {stats?.recentEvents && stats.recentEvents.length > 0 ? (
-          <div className="space-y-3">
-            {stats.recentEvents.map((event) => (
-              <EventCard key={event.id} event={event} compact showStatus />
-            ))}
-          </div>
-        ) : (
-          <EmptyState message="No events yet. Sync your Gmail or ingest mock emails to get started." />
-        )}
-      </div>
-
-      {/* Gmail controls */}
-      <div className="bg-white rounded-lg shadow p-5">
-        <h2 className="text-sm font-semibold text-gray-700 mb-3">Gmail Integration</h2>
-
-        {gmailStatus === null ? (
-          <p className="text-gray-400 text-sm">Loading...</p>
-        ) : gmailStatus.connected ? (
-          <div>
-            <p className="text-green-600 text-sm mb-1">
-              Connected: {gmailStatus.email}
-            </p>
-            {gmailStatus.lastSyncAt && (
-              <p className="text-gray-400 text-xs mb-3">
-                Last synced: {new Date(gmailStatus.lastSyncAt).toLocaleString()}
-              </p>
-            )}
-            <button
-              onClick={handleSync}
-              disabled={syncing}
-              className="px-3 py-1.5 text-sm bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {syncing ? 'Syncing...' : 'Sync Now'}
-            </button>
-          </div>
-        ) : (
-          <a
-            href="/api/auth/gmail"
-            className="inline-block px-3 py-1.5 text-sm bg-gray-800 text-white rounded hover:bg-gray-900"
+      <header className="bg-white border-b border-gray-200">
+        <div className="max-w-6xl mx-auto px-4 flex items-center justify-between h-14">
+          <span className="font-bold text-lg text-gray-900">Job Inbox OS</span>
+          <Link
+            href="/dashboard"
+            className="px-4 py-1.5 text-sm font-medium bg-blue-600 text-white rounded hover:bg-blue-700"
           >
-            Connect Gmail
-          </a>
-        )}
+            Try the beta
+          </Link>
+        </div>
+      </header>
 
-        {syncResult && (
-          <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded text-sm">
-            <p>Emails scanned: {syncResult.total}</p>
-            <p>Ingested: {syncResult.ingested}</p>
-            <p className="text-gray-500">Filtered (low confidence): {syncResult.filtered}</p>
-            <p className="text-gray-500">Already synced: {syncResult.skipped}</p>
-            {syncResult.errors > 0 && <p className="text-red-600">Errors: {syncResult.errors}</p>}
-          </div>
-        )}
+      <section className="max-w-6xl mx-auto px-4 pt-20 pb-16 text-center">
+        <h1 className="text-4xl md:text-5xl font-bold text-gray-900 tracking-tight mb-5">
+          Turn your inbox into your job search command center.
+        </h1>
+        <p className="text-lg text-gray-600 max-w-2xl mx-auto mb-8">
+          Job Inbox OS reads your Gmail, classifies every application, interview, and
+          offer, and organizes them into a clean timeline per job — so nothing slips
+          through the cracks.
+        </p>
+        <Link
+          href="/dashboard"
+          className="inline-block bg-blue-600 text-white px-6 py-3 rounded text-base font-medium hover:bg-blue-700"
+        >
+          Try the beta
+        </Link>
+        <p className="text-xs text-gray-500 mt-3">Free during beta. No credit card.</p>
+      </section>
 
-        {error && (
-          <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded text-sm text-red-700">
-            {error}
+      <section className="max-w-6xl mx-auto px-4 pb-16">
+        <h2 className="text-sm font-semibold text-gray-700 mb-4 text-center uppercase tracking-wide">
+          What it does
+        </h2>
+        <div className="grid md:grid-cols-3 gap-4">
+          <div className="bg-white rounded-lg shadow p-5">
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">
+              Auto-classify every email
+            </h3>
+            <p className="text-sm text-gray-600">
+              Applications, interviews, assessments, offers, rejections — sorted the moment
+              they land. No manual tagging.
+            </p>
           </div>
-        )}
-      </div>
+          <div className="bg-white rounded-lg shadow p-5">
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">
+              Timeline per job
+            </h3>
+            <p className="text-sm text-gray-600">
+              Every event for a role collapses into one chronological thread. Know
+              exactly where each application stands.
+            </p>
+          </div>
+          <div className="bg-white rounded-lg shadow p-5">
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">
+              Review before anything sticks
+            </h3>
+            <p className="text-sm text-gray-600">
+              Low-confidence classifications land in a review queue. Confirm or dismiss
+              in one click — your data stays accurate.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section className="max-w-6xl mx-auto px-4 pb-20">
+        <h2 className="text-sm font-semibold text-gray-700 mb-4 text-center uppercase tracking-wide">
+          How it works
+        </h2>
+        <div className="grid md:grid-cols-3 gap-4">
+          <div className="bg-white rounded-lg shadow p-5">
+            <div className="text-3xl font-bold text-blue-600 mb-2">1</div>
+            <h3 className="text-base font-semibold text-gray-900 mb-1">
+              Connect in 30 seconds
+            </h3>
+            <p className="text-sm text-gray-600">
+              Sign in with Google once. Read-only access — we never send mail on your
+              behalf.
+            </p>
+          </div>
+          <div className="bg-white rounded-lg shadow p-5">
+            <div className="text-3xl font-bold text-blue-600 mb-2">2</div>
+            <h3 className="text-base font-semibold text-gray-900 mb-1">
+              Keep applying like normal
+            </h3>
+            <p className="text-sm text-gray-600">
+              Nothing to change about your workflow. New events appear in your dashboard
+              as responses hit your inbox.
+            </p>
+          </div>
+          <div className="bg-white rounded-lg shadow p-5">
+            <div className="text-3xl font-bold text-blue-600 mb-2">3</div>
+            <h3 className="text-base font-semibold text-gray-900 mb-1">
+              Check in when you want
+            </h3>
+            <p className="text-sm text-gray-600">
+              Open the dashboard for a real-time pulse on every application — no more
+              digging through email threads.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section className="max-w-6xl mx-auto px-4 pb-20 text-center">
+        <h2 className="text-2xl font-bold text-gray-900 mb-3">
+          Ready to get your job search organized?
+        </h2>
+        <p className="text-gray-600 mb-6">
+          Open the dashboard and connect your inbox — takes under a minute.
+        </p>
+        <Link
+          href="/dashboard"
+          className="inline-block bg-blue-600 text-white px-6 py-3 rounded text-base font-medium hover:bg-blue-700"
+        >
+          Try the beta
+        </Link>
+      </section>
+
+      <footer className="border-t border-gray-200 bg-white">
+        <div className="max-w-6xl mx-auto px-4 py-6 text-sm text-gray-500 flex items-center justify-between">
+          <span>Job Inbox OS — beta</span>
+          <Link href="/dashboard" className="hover:text-gray-900">
+            Open the app
+          </Link>
+        </div>
+      </footer>
     </div>
   );
 }

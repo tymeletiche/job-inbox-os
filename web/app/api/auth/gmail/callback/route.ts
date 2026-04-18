@@ -10,11 +10,11 @@ export async function GET(request: NextRequest) {
 
     if (error) {
       console.error('Gmail OAuth error:', error);
-      return NextResponse.redirect(new URL('/?gmail_error=auth_denied', request.url));
+      return NextResponse.redirect(new URL('/dashboard?gmail_error=auth_denied', request.url));
     }
 
     if (!code) {
-      return NextResponse.redirect(new URL('/?gmail_error=no_code', request.url));
+      return NextResponse.redirect(new URL('/dashboard?gmail_error=no_code', request.url));
     }
 
     const userId = process.env.DEV_USER_ID;
@@ -45,7 +45,7 @@ export async function GET(request: NextRequest) {
 
     if (!refreshToken) {
       // No refresh token from Google and none stored — force re-auth
-      return NextResponse.redirect(new URL('/?gmail_error=no_refresh_token', request.url));
+      return NextResponse.redirect(new URL('/dashboard?gmail_error=no_refresh_token', request.url));
     }
 
     // Upsert GmailAccount
@@ -66,9 +66,9 @@ export async function GET(request: NextRequest) {
       },
     });
 
-    return NextResponse.redirect(new URL('/?gmail_connected=true', request.url));
+    return NextResponse.redirect(new URL('/dashboard?gmail_connected=true', request.url));
   } catch (error) {
     console.error('Gmail callback error:', error);
-    return NextResponse.redirect(new URL('/?gmail_error=callback_failed', request.url));
+    return NextResponse.redirect(new URL('/dashboard?gmail_error=callback_failed', request.url));
   }
 }
