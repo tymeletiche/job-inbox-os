@@ -21,6 +21,8 @@ import {
   ADDITIONAL_FIXTURES,
   ADVERSARIAL_REAL_JOB_FIXTURES,
   ADVERSARIAL_JUNK_FIXTURES,
+  STRESS_BALANCED_FIXTURES,
+  STRESS_TRICKY_FIXTURES,
   TestFixture,
 } from './fixtures/emails';
 
@@ -121,6 +123,14 @@ describe('classifyEmail', () => {
 
   describe('adversarial: tricky junk emails', () => {
     runFixtures(ADVERSARIAL_JUNK_FIXTURES);
+  });
+
+  describe('stress test: balanced coverage', () => {
+    runFixtures(STRESS_BALANCED_FIXTURES);
+  });
+
+  describe('stress test: tricky language', () => {
+    runFixtures(STRESS_TRICKY_FIXTURES);
   });
 
   describe('real-world regression', () => {

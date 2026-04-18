@@ -7,6 +7,32 @@ const COMMON_WORDS = new Set([
   'hi', 'hey', 'good', 'great', 'team', 'all', 'we', 'you',
 ]);
 
+// Tokens that a legitimate company name should never contain. If the regex
+// capture pulls in any of these, the match is almost certainly a subject-line
+// fragment or job-title leakage, not a real company — reject and try the next
+// pattern (ultimately falling back to sender domain).
+const NON_COMPANY_WORDS = new Set([
+  // Email subject / event words
+  'interview', 'invitation', 'request', 'invite', 'challenge',
+  'round', 'screening', 'screen', 'assessment', 'application',
+  'position', 'role', 'opportunity', 'opening', 'job', 'update',
+  'confirmation', 'confirmed', 'scheduled', 'received', 'submitted',
+  'following', 'reaching', 'regarding', 'next',
+  // Job titles & disciplines
+  'engineer', 'engineering', 'developer', 'designer', 'manager',
+  'senior', 'junior', 'staff', 'principal', 'director', 'lead',
+  'architect', 'analyst', 'scientist', 'consultant', 'intern',
+  'software', 'product', 'data',
+  // Greetings & salutations
+  'hi', 'hello', 'hey', 'dear', 'thanks', 'regards', 'welcome',
+  'greetings',
+  // Meeting / format words
+  'coffee', 'chat', 'call', 'conversation', 'meeting', 'phone',
+  'zoom', 'onsite', 'remote',
+  // Generic email vocabulary
+  'offer', 'rejection', 'coding', 'technical',
+]);
+
 // Words that should be stripped from the end of a captured company name
 const TRAILING_NOISE_WORDS = new Set([
   'we', 'our', 'the', 'thank', 'please', 'your', 'this', 'that',
@@ -32,6 +58,10 @@ const COMPANY_PATTERNS: RegExp[] = [
   /\bteam\s+at\s+([A-Z][A-Za-z0-9\s&.\-]+?)(?:\s*[,.:;]|\s+[a-z])/,
   // "on behalf of Google"
   /\bon\s+behalf\s+of\s+([A-Z][A-Za-z0-9\s&.\-]+?)(?:\s*[,.:;]|\s+[a-z])/,
+  // "applying to Linear", "applying at Stripe"
+  /\bapplying\s+(?:to|at)\s+(?:the\s+)?([A-Z][A-Za-z0-9\s&.\-]+?)(?:\s*[,.:;]|\s+[a-z])/,
+  // "your interest in Vercel", "interest in Stripe"
+  /\binterest\s+in\s+([A-Z][A-Za-z0-9\s&.\-]+?)(?:\s*[,.:;]|\s+[a-z])/,
   // "your application to Google" / "application at Google"
   /\bapplication\s+(?:to|at)\s+([A-Z][A-Za-z0-9\s&.\-]+?)(?:\s*[,.:;]|\s+[a-z])/,
   // "at Google", "at Amazon Web Services"
@@ -119,10 +149,14 @@ function extractCompany(subject: string, body: string, sender: string): string |
   const combinedText = `${subject} ${body}`;
 
   for (const pattern of COMPANY_PATTERNS) {
-    const match = combinedText.match(pattern);
-    if (match) {
-      const name = cleanCompanyName(match[1].trim());
-      if (name.length >= 2 && !COMMON_WORDS.has(name.toLowerCase())) {
+    const matchResult = pattern.exec(combinedText);
+    if (matchResult) {
+      const name = cleanCompanyName(matchResult[1].trim());
+      if (
+        name.length >= 2 &&
+        !COMMON_WORDS.has(name.toLowerCase()) &&
+        !containsNonCompanyToken(name)
+      ) {
         return name;
       }
     }
@@ -130,6 +164,11 @@ function extractCompany(subject: string, body: string, sender: string): string |
 
   // Fallback: infer from sender domain
   return extractCompanyFromDomain(sender);
+}
+
+function containsNonCompanyToken(name: string): boolean {
+  const tokens = name.toLowerCase().split(/[\s.,\-]+/).filter(Boolean);
+  return tokens.some((t) => NON_COMPANY_WORDS.has(t));
 }
 
 function extractPosition(subject: string, body: string): string | null {
