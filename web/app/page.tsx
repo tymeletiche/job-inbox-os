@@ -1,19 +1,11 @@
 import Link from 'next/link';
+import MarketingHeader from '@/components/marketing-header';
+import MarketingFooter from '@/components/marketing-footer';
 
 export default function LandingPage() {
   return (
     <div>
-      <header className="bg-white border-b border-gray-200">
-        <div className="max-w-6xl mx-auto px-4 flex items-center justify-between h-14">
-          <span className="font-bold text-lg text-gray-900">Job Inbox OS</span>
-          <Link
-            href="/dashboard"
-            className="px-4 py-1.5 text-sm font-medium bg-blue-600 text-white rounded hover:bg-blue-700"
-          >
-            Try the beta
-          </Link>
-        </div>
-      </header>
+      <MarketingHeader />
 
       <section className="max-w-6xl mx-auto px-4 pt-20 pb-16 text-center">
         <h1 className="text-4xl md:text-5xl font-bold text-gray-900 tracking-tight mb-5">
@@ -121,14 +113,7 @@ export default function LandingPage() {
         </Link>
       </section>
 
-      <footer className="border-t border-gray-200 bg-white">
-        <div className="max-w-6xl mx-auto px-4 py-6 text-sm text-gray-500 flex items-center justify-between">
-          <span>Job Inbox OS — beta</span>
-          <Link href="/dashboard" className="hover:text-gray-900">
-            Open the app
-          </Link>
-        </div>
-      </footer>
+      <MarketingFooter />
     </div>
   );
 }
